@@ -12,8 +12,6 @@ import org.jetbrains.kotlin.gradle.dsl.ExplicitApiMode.Warning
 import org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension
 import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
 import org.jetbrains.kotlin.gradle.dsl.KotlinProjectExtension
-import org.jetbrains.kotlin.gradle.plugin.KotlinMultiplatformPluginWrapper
-import org.jetbrains.kotlin.gradle.plugin.KotlinPluginWrapper
 import org.jetbrains.kotlin.gradle.targets.js.yarn.yarn
 
 
@@ -26,45 +24,12 @@ plugins {
     }
     `version-catalog`
     `maven-publish`
+    signing
+    alias(versions.plugins.nexus.publish.plugin)
 }
 
 val logKubeVersion = project.properties["version"] as String
 val logKubeGroup = project.properties["group"] as String
-//val logKubeUrl: String by project
-//val logKubeBaseUrl: String by project
-
-//tasks.register<Copy>("docusaurusProcessResources") {
-//    group = "documentation"
-//    dependsOn("dokkaHtmlMultiModule")
-//    from("build/dokka/htmlMultiModule")
-//    into("docs/static/api")
-//    outputs.files("docs/src/inputData.ts", "docs/inputData.js")
-//    doLast {
-//        rootDir.resolve("docs/src/inputData.ts").writer().use {
-//            it.write(
-//                """
-//                    export const koneGroup = "$koneGroup"
-//                    export const koneVersion = "$koneVersion"
-//                    export const koneUrl = "$koneUrl"
-//                    export const koneBaseUrl = "$koneBaseUrl"
-//                """.trimIndent()
-//            )
-//        }
-//        rootDir.resolve("docs/inputData.js").writer().use {
-//            it.write(
-//                """
-//                    module.exports = {
-//                        koneGroup: "$koneGroup",
-//                        koneVersion: "$koneVersion",
-//                        koneUrl: "$koneUrl",
-//                        koneBaseUrl: "$koneBaseUrl",
-//                    }
-//                """.trimIndent()
-//            )
-//        }
-//
-//    }
-//}
 
 allprojects {
     repositories {
@@ -75,7 +40,6 @@ allprojects {
 }
 
 val jvmTargetVersion : String by properties
-//val ignoreManualBugFixes = (properties["ignoreManualBugFixes"] as String) == "true"
 
 val Project.versions: LibrariesForVersions get() = rootProject.extensions.getByName<LibrariesForVersions>("versions")
 val Project.projects: RootProjectAccessor get() = rootProject.extensions.getByName<RootProjectAccessor>("projects")
@@ -95,7 +59,7 @@ catalog.versionCatalog {
 }
 
 gradle.projectsEvaluated {
-    val bundleProjects = stal.lookUp.projectsThat { has("libs") }
+    val bundleProjects = stal.lookUp.projectsThat { has("versionCatalog") }
     val bundleAliases = bundleProjects.map { it.alias }
     catalog.versionCatalog {
         for (p in bundleProjects)
@@ -110,6 +74,15 @@ publishing {
         create<MavenPublication>("versionCatalog") {
             artifactId = "logKube.versionCatalog"
             from(components["versionCatalog"])
+        }
+    }
+}
+
+nexusPublishing {
+    repositories {
+        sonatype {
+            nexusUrl.set(uri("https://s01.oss.sonatype.org/service/local/"))
+            snapshotRepositoryUrl.set(uri("https://s01.oss.sonatype.org/content/repositories/snapshots/"))
         }
     }
 }
@@ -258,14 +231,54 @@ stal {
                 }
             }
         }
+        "publication" {
+            pluginManager.withPlugin("org.gradle.maven-publish") {
+                afterEvaluate {
+                    configure<PublishingExtension> {
+                        publications.withType<MavenPublication> {
+                            artifactId = "${extra["artifactPrefix"]}$artifactId"
+                        }
+                    }
+                }
+            }
+        }
         "publishing" {
             apply(plugin = "org.gradle.maven-publish")
+            apply(plugin = "org.gradle.signing")
             afterEvaluate {
                 configure<PublishingExtension> {
                     publications.withType<MavenPublication> {
-                        artifactId = "${extra["artifactPrefix"]}$artifactId"
+                        pom {
+                            name = "LogKube"
+                            description = "Simple universal logging library"
+                            url = "https://github.com/lounres/LogKube"
+                            
+                            licenses {
+                                license {
+                                    name = "Apache License, Version 2.0"
+                                    url = "https://opensource.org/license/apache-2-0/"
+                                }
+                            }
+                            developers {
+                                developer {
+                                    id = "lounres"
+                                    name = "Gleb Minaev"
+                                    email = "minaevgleb@yandex.ru"
+                                }
+                            }
+                            scm {
+                                url = "https://github.com/lounres/LogKube"
+                            }
+                        }
                     }
                 }
+                tasks.withType<AbstractPublishToMaven>().configureEach {
+                    val signingTasks = tasks.withType<Sign>()
+                    mustRunAfter(signingTasks)
+                }
+            }
+            configure<SigningExtension> {
+                sign(the<PublishingExtension>().publications)
             }
         }
         case { hasAllOf("dokka", "publishing") } implies {

@@ -35,6 +35,7 @@ plugins {
 
 stal {
     structure {
+        taggedWith("publishing")
         defaultIncludeIf = { it.listFiles { file: File -> file.name != "build" || !file.isDirectory }?.isNotEmpty() ?: false }
         "libs" {
             subdirs("libs")
@@ -50,8 +51,9 @@ stal {
         // Extra
         "examples" since { has("libs") }
         "benchmark" since { has("libs") }
-        "publishing" since { hasAnyOf("libs") }
-//        "dokka" since { has("libs") }
+        "publication" since { hasAnyOf("libs") }
+        "publishing" since { has("publication") }
+        "dokka" since { has("libs") }
         "versionCatalog" since { has("libs") }
     }
 
