@@ -2,6 +2,13 @@ rootProject.name = "LogKube"
 
 enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 
+val projectProperties = java.util.Properties()
+file("gradle.properties").inputStream().use {
+    projectProperties.load(it)
+}
+
+val versions: String by projectProperties
+
 @Suppress("UnstableApiUsage")
 dependencyResolutionManagement {
     repositories {
@@ -9,18 +16,21 @@ dependencyResolutionManagement {
         mavenCentral()
         maven("https://repo.kotlin.link")
     }
+    
+    versionCatalogs {
+        create("versions").from("dev.lounres:versions:$versions")
+    }
 }
 
 pluginManagement {
     repositories {
         gradlePluginPortal()
         mavenCentral()
-//        mavenLocal()
     }
 }
 
 plugins {
-    id("dev.lounres.gradle.stal") version "0.3.1"
+    id("dev.lounres.gradle.stal") version "0.4.0"
 }
 
 stal {
@@ -29,6 +39,7 @@ stal {
         "libs" {
             subdirs("libs")
         }
+        "docs"()
     }
 
     tag {
