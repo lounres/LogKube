@@ -1,25 +1,92 @@
 package dev.lounres.logKube.core
 
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 
 
-public expect class CurrentPlatformLogMetadata: LogMetadata {
+public expect class CurrentPlatformLogMetadata<Level>: LogMetadata<Level> {
+    override val id: String
     override val timestamp: Instant
     override val loggerName: String
     override val source: String?
-    override val level: Level
+    override val logLevel: Level
 }
 
-public typealias CurrentPlatformLogEvent = LogEvent<CurrentPlatformLogMetadata>
+public typealias CurrentPlatformLogEvent<Level> = LogEvent<Level, CurrentPlatformLogMetadata<Level>>
 
-public typealias CurrentPlatformLogger = Logger<CurrentPlatformLogMetadata>
+public typealias CurrentPlatformLogger<Level> = Logger<Level, CurrentPlatformLogMetadata<Level>>
 
-public expect fun CurrentPlatformLogger(name: String, logAcceptors: List<CurrentPlatformLogAcceptor> = emptyList()): CurrentPlatformLogger
+public expect inline fun <Level> CurrentPlatformLogger<Level>.log(
+    source: String? = null,
+    logLevel: Level,
+    throwable: Throwable? = null,
+    items: () -> Map<String, String> = { emptyMap() },
+    message: () -> String
+)
 
-public typealias CurrentPlatformLogAcceptor = LogAcceptor<CurrentPlatformLogMetadata>
+public inline fun CurrentPlatformLogger<LogLevel>.debug(
+    source: String? = null,
+    throwable: Throwable? = null,
+    items: () -> Map<String, String> = { emptyMap() },
+    message: () -> String
+) {
+    log(
+        source = source,
+        logLevel = LogLevel.DEBUG,
+        throwable = throwable,
+        items = items,
+        message = message,
+    )
+}
 
-public typealias CurrentPlatformLogWriter = LogWriter<CurrentPlatformLogMetadata>
+public inline fun CurrentPlatformLogger<LogLevel>.info(
+    source: String? = null,
+    throwable: Throwable? = null,
+    items: () -> Map<String, String> = { emptyMap() },
+    message: () -> String
+) {
+    log(
+        source = source,
+        logLevel = LogLevel.INFO,
+        throwable = throwable,
+        items = items,
+        message = message,
+    )
+}
 
-public expect object DefaultCurrentPlatformLogWriter : CurrentPlatformLogWriter {
-    override fun log(event: LogEvent<CurrentPlatformLogMetadata>)
+public inline fun CurrentPlatformLogger<LogLevel>.warn(
+    source: String? = null,
+    throwable: Throwable? = null,
+    items: () -> Map<String, String> = { emptyMap() },
+    message: () -> String
+) {
+    log(
+        source = source,
+        logLevel = LogLevel.WARN,
+        throwable = throwable,
+        items = items,
+        message = message,
+    )
+}
+
+public inline fun CurrentPlatformLogger<LogLevel>.error(
+    source: String? = null,
+    throwable: Throwable? = null,
+    items: () -> Map<String, String> = { emptyMap() },
+    message: () -> String
+) {
+    log(
+        source = source,
+        logLevel = LogLevel.ERROR,
+        throwable = throwable,
+        items = items,
+        message = message,
+    )
+}
+
+public typealias CurrentPlatformLogAcceptor<Level> = LogAcceptor<Level, CurrentPlatformLogMetadata<Level>>
+
+public typealias CurrentPlatformLogWriter<Level> = LogWriter<Level, CurrentPlatformLogMetadata<Level>>
+
+public expect object DefaultCurrentPlatformLogWriter : CurrentPlatformLogWriter<LogLevel> {
+    override fun log(event: LogEvent<LogLevel, CurrentPlatformLogMetadata<LogLevel>>)
 }

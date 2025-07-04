@@ -1,6 +1,10 @@
 @file:Suppress("SuspiciousCollectionReassignment")
 @file:OptIn(ExperimentalKotlinGradlePluginApi::class)
 
+import com.vanniktech.maven.publish.JavadocJar
+import com.vanniktech.maven.publish.KotlinMultiplatform
+import com.vanniktech.maven.publish.MavenPublishBaseExtension
+import com.vanniktech.maven.publish.SonatypeHost
 import org.gradle.accessors.dm.LibrariesForVersions
 import org.gradle.accessors.dm.RootProjectAccessor
 import org.gradle.kotlin.dsl.configure
@@ -23,9 +27,9 @@ plugins {
         alias(dokka)
     }
     `version-catalog`
-    `maven-publish`
-    signing
-    alias(versions.plugins.nexus.publish.plugin)
+//    `maven-publish`
+//    signing
+    id("com.vanniktech.maven.publish") version "0.31.0"
 }
 
 val logKubeVersion = project.properties["version"] as String
@@ -36,6 +40,7 @@ allprojects {
         mavenCentral()
         maven("https://repo.kotlin.link")
 //        maven("https://oss.sonatype.org/content/repositories/snapshots")
+        mavenLocal()
     }
 }
 
@@ -51,8 +56,8 @@ fun PluginManager.withPlugins(vararg pluginDeps: PluginDependency, block: Applie
 fun PluginManager.withPlugins(vararg pluginDeps: Provider<PluginDependency>, block: AppliedPlugin.() -> Unit) = pluginDeps.forEach { withPlugin(it, block) }
 inline fun <T> Iterable<T>.withEach(action: T.() -> Unit) = forEach { it.action() }
 
-val Project.artifact: String get() = "${extra["artifactPrefix"]}${project.name}"
-val Project.alias: String get() = "${extra["aliasPrefix"]}${project.name}"
+val Project.artifact: String get() = extra["artifactId"] as String
+val Project.alias: String get() = extra["alias"] as String
 
 catalog.versionCatalog {
     version("logKube", logKubeVersion)
@@ -66,24 +71,6 @@ gradle.projectsEvaluated {
             library(p.alias, logKubeGroup, p.artifact).versionRef("logKube")
 
         bundle("all", bundleAliases)
-    }
-}
-
-publishing {
-    publications {
-        create<MavenPublication>("versionCatalog") {
-            artifactId = "logKube.versionCatalog"
-            from(components["versionCatalog"])
-        }
-    }
-}
-
-nexusPublishing {
-    repositories {
-        sonatype {
-            nexusUrl.set(uri("https://s01.oss.sonatype.org/service/local/"))
-            snapshotRepositoryUrl.set(uri("https://s01.oss.sonatype.org/content/repositories/snapshots/"))
-        }
     }
 }
 
@@ -116,8 +103,6 @@ stal {
             configure<KotlinMultiplatformExtension> {
                 applyDefaultHierarchyTemplate()
                 
-                jvmToolchain(jvmTargetVersion.toInt())
-                
                 compilerOptions {
                     freeCompilerArgs = freeCompilerArgs.get() + listOf(
                         "-Xexpect-actual-classes",
@@ -132,11 +117,11 @@ stal {
                         }
                     }
                 }
-
-//                js(IR) {
-//                    browser()
-//                    nodejs()
-//                }
+                
+                js {
+                    browser()
+                    nodejs()
+                }
 
                 @OptIn(ExperimentalWasmDsl::class)
                 wasmJs {
@@ -157,7 +142,7 @@ stal {
 
                 @Suppress("UNUSED_VARIABLE")
                 sourceSets {
-                    val commonTest by getting {
+                    commonTest {
                         dependencies {
                             implementation(kotlin("test"))
                         }
@@ -171,18 +156,25 @@ stal {
         "kotlin common settings" {
             pluginManager.withPlugins(versions.plugins.kotlin.jvm, versions.plugins.kotlin.multiplatform) {
                 configure<KotlinProjectExtension> {
+                    jvmToolchain {
+                        languageVersion = JavaLanguageVersion.of(project.extra["jvmTargetVersion"] as String)
+                        vendor = JvmVendorSpec.matching(project.extra["jvmVendor"] as String)
+                    }
+                    
                     sourceSets {
                         all {
                             languageSettings {
                                 progressiveMode = true
-                                enableLanguageFeature("ContextReceivers")
+                                enableLanguageFeature("ContextParameters")
                                 enableLanguageFeature("ValueClasses")
                                 enableLanguageFeature("ContractSyntaxV2")
                                 enableLanguageFeature("ExplicitBackingFields")
+                                optIn("kotlin.time.ExperimentalTime")
                                 optIn("kotlin.contracts.ExperimentalContracts")
                                 optIn("kotlin.ExperimentalStdlibApi")
                                 optIn("kotlin.ExperimentalSubclassOptIn")
                                 optIn("kotlin.ExperimentalUnsignedTypes")
+                                optIn("kotlin.uuid.ExperimentalUuidApi")
                             }
                         }
                     }
@@ -215,77 +207,54 @@ stal {
             }
             
             configure<DokkaExtension> {
-                moduleName = "${project.extra["artifactPrefix"]}${project.name}"
+                moduleName = project.artifact
                 // DOKKA-3885
                 dokkaGeneratorIsolation = ClassLoaderIsolation()
             }
-
-            task<Jar>("dokkaJar") {
-                group = "dokka"
-                description = "Assembles Kotlin docs with Dokka into a javadoc JAR"
-                archiveClassifier = "javadoc"
-                afterEvaluate {
-                    val dokkaGeneratePublicationHtml by tasks.getting
-                    dependsOn(dokkaGeneratePublicationHtml)
-                    from(dokkaGeneratePublicationHtml)
-                }
-            }
         }
-        "publication" {
-            pluginManager.withPlugin("org.gradle.maven-publish") {
-                afterEvaluate {
-                    configure<PublishingExtension> {
-                        publications.withType<MavenPublication> {
-                            artifactId = "${extra["artifactPrefix"]}$artifactId"
-                        }
-                    }
+        "kotlin multiplatform publication" {
+            pluginManager.withPlugin("com.vanniktech.maven.publish") {
+                configure<MavenPublishBaseExtension> {
+                    configure(
+                        KotlinMultiplatform(
+                            javadocJar =
+                                if (extra["isDokkaConfigured"] == true) JavadocJar.Dokka("dokkaGeneratePublicationHtml")
+                                else JavadocJar.Empty(),
+                            sourcesJar = true,
+                        )
+                    )
                 }
             }
         }
         "publishing" {
-            apply(plugin = "org.gradle.maven-publish")
-            apply(plugin = "org.gradle.signing")
-            afterEvaluate {
-                configure<PublishingExtension> {
-                    publications.withType<MavenPublication> {
-                        pom {
-                            name = "LogKube"
-                            description = "Simple universal logging library"
-                            url = "https://github.com/lounres/LogKube"
-                            
-                            licenses {
-                                license {
-                                    name = "Apache License, Version 2.0"
-                                    url = "https://opensource.org/license/apache-2-0/"
-                                }
-                            }
-                            developers {
-                                developer {
-                                    id = "lounres"
-                                    name = "Gleb Minaev"
-                                    email = "minaevgleb@yandex.ru"
-                                }
-                            }
-                            scm {
-                                url = "https://github.com/lounres/LogKube"
-                            }
+            apply(plugin = "com.vanniktech.maven.publish")
+            configure<MavenPublishBaseExtension> {
+                publishToMavenCentral(SonatypeHost.CENTRAL_PORTAL)
+                
+                signAllPublications()
+                
+                coordinates(groupId = project.group as String, artifactId = project.artifact, version = project.version as String)
+                
+                pom {
+                    name = "LogKube"
+                    description = "Simple universal logging library"
+                    url = "https://github.com/lounres/LogKube"
+
+                    licenses {
+                        license {
+                            name = "Apache License, Version 2.0"
+                            url = "https://opensource.org/license/apache-2-0/"
                         }
                     }
-                }
-                tasks.withType<AbstractPublishToMaven>().configureEach {
-                    val signingTasks = tasks.withType<Sign>()
-                    mustRunAfter(signingTasks)
-                }
-            }
-            configure<SigningExtension> {
-                sign(the<PublishingExtension>().publications)
-            }
-        }
-        case { hasAllOf("dokka", "publishing") } implies {
-            afterEvaluate {
-                configure<PublishingExtension> {
-                    publications.withType<MavenPublication> {
-                        artifact(tasks.named<Jar>("dokkaJar"))
+                    developers {
+                        developer {
+                            id = "lounres"
+                            name = "Gleb Minaev"
+                            email = "minaevgleb@yandex.ru"
+                        }
+                    }
+                    scm {
+                        url = "https://github.com/lounres/LogKube"
                     }
                 }
             }

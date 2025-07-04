@@ -15,6 +15,7 @@ dependencyResolutionManagement {
         gradlePluginPortal()
         mavenCentral()
         maven("https://repo.kotlin.link")
+        mavenLocal()
     }
     
     versionCatalogs {
@@ -35,7 +36,7 @@ plugins {
 
 stal {
     structure {
-        taggedWith("publishing")
+        taggedWith("publishing", "version catalog")
         defaultIncludeIf = { it.listFiles { file: File -> file.name != "build" || !file.isDirectory }?.isNotEmpty() ?: false }
         "libs" {
             subdirs("libs")
@@ -51,20 +52,29 @@ stal {
         // Extra
         "examples" since { has("libs") }
         "benchmark" since { has("libs") }
-        "publication" since { hasAnyOf("libs") }
-        "publishing" since { has("publication") }
+        "kotlin multiplatform publication" since { hasAnyOf("libs") }
+        "publishing" since { has("libs") }
         "dokka" since { has("libs") }
         "versionCatalog" since { has("libs") }
     }
 
     action {
         gradle.allprojects {
-            extra["artifactPrefix"] = ""
-            extra["aliasPrefix"] = ""
+            extra["artifactId"] = ""
+            extra["alias"] = ""
+            extra["isDokkaConfigured"] = false
+            extra["jvmTargetVersion"] = settings.extra["jvmTargetVersion"]
+            extra["jvmVendor"] = settings.extra["jvmVendor"]
         }
         "libs" {
-            extra["artifactPrefix"] = "logKube."
-            extra["aliasPrefix"] = ""
+            extra["artifactId"] = "logKube.${project.name}"
+            extra["alias"] = project.name
+        }
+        "version catalog" {
+            extra["artifactId"] = "logKube.versionCatalog"
+        }
+        "dokka" {
+            extra["isDokkaConfigured"] = true
         }
     }
 }

@@ -1,8 +1,25 @@
 package dev.lounres.logKube.core
 
 
-public actual typealias CurrentPlatformLogMetadata = WasmJsLogMetadata
+public actual typealias CurrentPlatformLogMetadata<Level> = WasmJsLogMetadata<Level>
 
-public actual fun CurrentPlatformLogger(name: String, logAcceptors: List<WasmJsLogAcceptor>): CurrentPlatformLogger = WasmJsLogger(name, logAcceptors)
+public actual inline fun <Level> WasmJsLogger<Level>.log(
+    source: String?,
+    logLevel: Level,
+    throwable: Throwable?,
+    items: () -> Map<String, String>,
+    message: () -> String
+) {
+    log(
+        metadata = WasmJsLogMetadata(
+            loggerName = this.name,
+            source = source,
+            logLevel = logLevel,
+        ),
+        throwable = throwable,
+        items = items,
+        message = message,
+    )
+}
 
 public actual typealias DefaultCurrentPlatformLogWriter = DefaultWasmJsLogWriter

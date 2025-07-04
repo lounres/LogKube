@@ -1,9 +1,9 @@
 package dev.lounres.logKube.core
 
 
-public actual typealias CurrentPlatformLogMetadata<Level> = JvmLogMetadata<Level>
+public actual typealias CurrentPlatformLogMetadata<Level> = JsLogMetadata<Level>
 
-public actual inline fun <Level> CurrentPlatformLogger<Level>.log(
+public actual inline fun <Level> JsLogger<Level>.log(
     source: String?,
     logLevel: Level,
     throwable: Throwable?,
@@ -11,9 +11,8 @@ public actual inline fun <Level> CurrentPlatformLogger<Level>.log(
     message: () -> String
 ) {
     log(
-        metadata = JvmLogMetadata(
+        metadata = JsLogMetadata(
             loggerName = this.name,
-            threadContext = Thread.currentThread().name,
             source = source,
             logLevel = logLevel,
         ),
@@ -23,4 +22,4 @@ public actual inline fun <Level> CurrentPlatformLogger<Level>.log(
     )
 }
 
-public actual typealias DefaultCurrentPlatformLogWriter = DefaultJvmLogWriter
+public actual typealias DefaultCurrentPlatformLogWriter = DefaultJsLogWriter
