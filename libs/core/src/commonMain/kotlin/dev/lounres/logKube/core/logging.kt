@@ -36,6 +36,11 @@ public data class Logger<Level, Metadata: LogMetadata<Level>> (
     public var logAcceptors: List<LogAcceptor<Level, Metadata>> = emptyList(),
 )
 
+public fun <Level, Metadata: LogMetadata<Level>> Logger(
+    name: String,
+    vararg logAcceptors: LogAcceptor<Level, Metadata>
+): Logger<Level, Metadata> = Logger(name, logAcceptors.toList())
+
 public inline fun <Level, Metadata: LogMetadata<Level>> Logger<Level, Metadata>.log(
     metadata: Metadata,
     throwable: Throwable? = null,
